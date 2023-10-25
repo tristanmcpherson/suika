@@ -8,18 +8,24 @@ import { Game } from './scenes/Game'
 const config: Phaser.Types.Core.GameConfig = {
 	type: Phaser.AUTO,
 	parent: 'phaser-container',
-	backgroundColor: '#282c34',
+	backgroundColor: '#FFFFAF',
 	scale: {
-		mode: Phaser.Scale.ScaleModes.RESIZE,
-		width: window.innerWidth,
-		height: window.innerHeight,
+		mode: Phaser.Scale.ScaleModes.NONE,
+		width: 430,
+		height: 754,
 	},
 	physics: {
-		default: 'arcade',
-		arcade: {
-			gravity: { y: 0 },
-			debug: true,
-		},
+		default: 'matter',
+		matter: {
+			enableSleeping: false,
+			gravity: {
+				y: 0.5
+			},
+			debug: {
+				showBody: false,
+				showStaticBody: true
+			}
+		}
 	},
 	scene: [Bootstrap, Game],
 }

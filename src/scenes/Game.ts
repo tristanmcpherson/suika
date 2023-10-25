@@ -1,149 +1,163 @@
-rt { createWorld, addEntity, addComponent, System, IWorld } from 'bitecs'
+import { createWorld, addEntity, addComponent, System, IWorld, pipe } from 'bitecs'
+import { Position } from '../components/Position'
+import { Velocity } from '../components/Velocity'
 import {
-	Position,
-	Rotation,
-	Velocity,
-	Sprite,
-	Player,
-	CPU,
-	Input,
-	ArcadeSprite,
-	ArcadeSpriteStatic,
-} from '../components'
-import {
-	createSpriteSystem,
-	createMovementSystem,
-	createPlayerSystem,
-	createCPUSystem,
-	createArcadeSpriteSystem,
-	createArcadeSpriteStaticSystem,
-} from '../systems'
-enum Textures {
-	TankBlue = 0,
-	TankRed = 1,
-	TankGreen = 2,
-	TankSand = 3,
-	TankDark = 4,
-	TreeBrownLarge = 5,
-	TreeBrownSmall = 6,
-	TreeGreenLarge = 7,
-	TreeGreenSmall = 8,
+	movementSystem,
+} from '../systems/movementSystem'
+import { ITime, timeSystem } from '../systems/timeSystem'
+import Rotation from '../components/Rotation'
+import MouseInput from '../components/MouseInput'
+import { Sprite } from '../components/Sprite'
+import createSpriteSystem from '../systems/spriteSystem'
+import { spawnerSystem } from '../systems/spawnerSystem'
+import Spawner from '../components/Spawner'
+
+export interface Fruit {
+	width: number,
+	points: number
 }
-const TextureKeys = [
-	'tank_blue.png',
-	'tank_red.png',
-	'tank_green.png',
-	'tank_sand.png',
-	'tank_dark.png',
-	'treeBrown_large.png',
-	'treeBrown_small.png',
-	'treeGreen_large.png',
-	'treeGreen_small.png',
-]
+
+export const FruitTypes = ["cherry",  "strawberry", "grape", "dekopon", "orange", "apple", "pear", "peach", "pineapple", "melon", "watermelon"] as const;
+// need to adjust, only spawn small at first, maybe based on score? weight towards small ones
+export const SpawnableFruits = ["cherry", "strawberry", "grape", "dekopon", "orange"] as const;
+export type SpawnableFruitType = typeof SpawnableFruits[number];
+export type FruitType = typeof FruitTypes[number];
+export const Fruits: Record<FruitType, Fruit> = {
+	cherry: {
+		points: 2,
+		width: 32
+	},
+	strawberry: {
+		points: 4,
+		width: 47
+	},
+    grape: {
+        points: 6,
+        width: 64
+    },
+	dekopon: {
+        points: 8,
+        width: 71
+    },
+    orange: {
+        points: 10,
+        width: 92
+    },
+    apple: {
+        points: 5,
+        width: 109
+    },
+    pear: {
+        points: 6,
+        width: 118
+    },
+
+    peach: {
+        points: 8,
+        width: 22
+    },
+    pineapple: {
+        points: 9,
+        width: 25
+    },
+    melon: {
+        points: 10,
+        width: 30
+    },
+    watermelon: {
+        points: 11,
+        width: 35
+    }
+}
 
 export class Game extends Phaser.Scene {
-	private world?: IWorld
-	private spriteSystem?: System
-	private spriteStaticSystem?: System
-	private movementSystem?: System
-	private playerSystem?: System
-	private cpuSystem?: System
+	private world?: IWorld & {
+		time: ITime
+	}
+
 	private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
+	pipeline!: (...input: any[]) => any
 
 	constructor() {
 		super('game')
 	}
 
+	preload() {
+		for (let i = 0; i < FruitTypes.length; i++) {
+			this.load.image(FruitTypes[i].toLowerCase(), `assets/${FruitTypes[i].toLowerCase()}.png`);
+		}
+	}
+
 	init() {
-		this.cursors = this.input.keyboard.createCursorKeys()
+		this.cursors = this.input.keyboard!.createCursorKeys()
 	}
 
 	create() {
 		const { width, height } = this.scale
+		console.log("creating game");
 
 		this.world = createWorld()
+		this.world.time = { delta: 0, elapsed: 0, then: performance.now() }
 
-		const tank = addEntity(this.world)
+		// create player spawner
+		const player = addEntity(this.world);
+		console.log("PLAYER " + player);
+		addComponent(this.world, MouseInput, player);
+		addComponent(this.world, Spawner, player);
+		addComponent(this.world, Position, player);
+		Position.y[player] = 50;
+		Position.x[player] = width/2;
+		Position.ignoreGravity[player] = 0;
 
-		addComponent(this.world, Position, tank)
-		Position.x[tank] = 200
-		Position.y[tank] = 200
 
-		addComponent(this.world, Rotation, tank)
-		addComponent(this.world, Velocity, tank)
-		addComponent(this.world, Input, tank)
+		// create test fruit
+		// const test = addEntity(this.world);
+		// addComponent(this.world, Sprite, test);
+		// Sprite.texture[test] = FruitTypes.indexOf("apple");
+		// Sprite.width[test] = 30;
 
-		addComponent(this.world, ArcadeSprite, tank)
-		ArcadeSprite.texture[tank] = Textures.TankBlue
+		// addComponent(this.world, Position, test);
+		// Position.x[test] = 100;
+		// Position.y[test] = 100;
+		// Position.ignoreGravity[test] = 0;
 
-		addComponent(this.world, Player, tank)
+		// console.log("added entity: " + test);
 
-		// Create Large Tree
-		const largeTree = addEntity(this.world)
-		addComponent(this.world, Position, largeTree)
-		addComponent(this.world, ArcadeSpriteStatic, largeTree)
 
-		Position.x[largeTree] = 400
-		Position.y[largeTree] = 400
 
-		ArcadeSpriteStatic.texture[largeTree] = Textures.TreeGreenLarge
+		// add bottom bounding box
+		// todo add sides
 
-		// Create Small Tree
-		const smallTree = addEntity(this.world)
-		addComponent(this.world, Position, smallTree)
-		addComponent(this.world, ArcadeSpriteStatic, smallTree)
+		this.matter.world.add(
+			this.matter.bodies.rectangle(width / 2, height, width, 30, {
+				ignoreGravity: true,
+				isStatic: true
+			})
+		);
 
-		Position.x[smallTree] = 300
-		Position.y[smallTree] = 200
+		// const spriteStaticGroup = this.matter.add.staticGroup()
+		// this.physics.add.staticBody(0, height, width, 5);
 
-		ArcadeSpriteStatic.texture[smallTree] = Textures.TreeBrownSmall
 
-		// Create random CPU Tanks
-		for (let i = 0; i < 5; i++) {
-			const cpuTank = addEntity(this.world)
+		// this.physics.add.collider(spriteGroup, spriteStaticGroup)
+		// this.physics.add.collider(spriteGroup, spriteGroup)
 
-			addComponent(this.world, Position, cpuTank)
-			Position.x[cpuTank] = Phaser.Math.Between(width * 0.25, width * 0.75)
-			Position.y[cpuTank] = Phaser.Math.Between(height * 0.25, height * 0.75)
+		const spriteSystem = createSpriteSystem(this, FruitTypes);
 
-			addComponent(this.world, Rotation, cpuTank)
-			Rotation.angle[cpuTank] = 0
+		this.pipeline = pipe(movementSystem, timeSystem, spriteSystem, spawnerSystem(this));
+		// this.spriteSystem = createArcadeSpriteSystem(spriteGroup, TextureKeys)
+		// this.spriteStaticSystem = createArcadeSpriteStaticSystem(
+		// 	spriteStaticGroup,
+		// 	TextureKeys
+		// )
 
-			addComponent(this.world, Velocity, cpuTank)
-			Velocity.x[cpuTank] = 0
-			Velocity.y[cpuTank] = 0
-
-			addComponent(this.world, ArcadeSprite, cpuTank)
-			ArcadeSprite.texture[cpuTank] = Phaser.Math.Between(1, 4)
-
-			addComponent(this.world, CPU, cpuTank)
-			CPU.timeBetweenActions[cpuTank] = Phaser.Math.Between(100, 500)
-
-			addComponent(this.world, Input, cpuTank)
-		}
-
-		const spriteGroup = this.physics.add.group()
-		const spriteStaticGroup = this.physics.add.staticGroup()
-		this.physics.add.collider(spriteGroup, spriteStaticGroup)
-		this.physics.add.collider(spriteGroup, spriteGroup)
-
-		this.spriteSystem = createArcadeSpriteSystem(spriteGroup, TextureKeys)
-		this.spriteStaticSystem = createArcadeSpriteStaticSystem(
-			spriteStaticGroup,
-			TextureKeys
-		)
-		this.movementSystem = createMovementSystem()
-		this.playerSystem = createPlayerSystem(this.cursors)
-		this.cpuSystem = createCPUSystem(this)
+		// this.playerSystem = createPlayerSystem(this.cursors)
+		// this.cpuSystem = createCPUSystem(this)
 	}
 
 	update() {
 		if (!this.world) return
 
-		this.playerSystem?.(this.world)
-		this.cpuSystem?.(this.world)
-		this.movementSystem?.(this.world)
-		this.spriteSystem?.(this.world)
-		this.spriteStaticSystem?.(this.world)
+		this.pipeline(this.world);
 	}
 }

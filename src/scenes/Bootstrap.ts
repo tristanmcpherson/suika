@@ -11,7 +11,6 @@ export class Bootstrap extends Phaser.Scene {
 
 	preload() {
 		// This Loads my assets created with texture packer
-		this.load.multiatlas('tankers', 'assets/tanker-game.json', 'assets')
 	}
 
 	create() {
